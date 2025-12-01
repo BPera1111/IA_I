@@ -11,7 +11,7 @@ class FruitImage:
             raise FileNotFoundError(f"No se pudo abrir la imagen: {path}")
         self.hsv = cv2.cvtColor(self.bgr, cv2.COLOR_BGR2HSV)
 
-    def get_fruit_mask(self, sat_threshold=40, central_fraction=0.6):
+    def get_fruit_mask1(self, sat_threshold=40, central_fraction=0.6):
         """
         Devuelve una máscara booleana donde True = píxel que consideramos fruta.
         Estrategia MUY simple:
@@ -40,6 +40,72 @@ class FruitImage:
             fruit_mask = central_mask
 
         return fruit_mask
+
+    def get_fruit_mask(
+        self,
+        sat_threshold=40,
+        central_fraction=0.6,
+        use_bg_hue=True,
+        bg_border_frac=0.1,
+        bg_hue_tolerance=2,
+    ):
+        """
+        Devuelve una máscara booleana donde True = píxel que consideramos fruta.
+
+        Estrategia:
+        - Zona central de la imagen (asumimos fruta centrada).
+        - Filtro por saturación (descarta fondo blanco / muy apagado).
+        - (Opcional) Estimar Hue del fondo con los bordes y descartar píxeles con Hue parecido.
+          Esto ayuda cuando el fondo es madera marrón.
+        """
+        h, w = self.hsv.shape[:2]
+
+        # Región central
+        cy0 = int(h * (1 - central_fraction) / 2)
+        cy1 = int(h * (1 + central_fraction) / 2)
+        cx0 = int(w * (1 - central_fraction) / 2)
+        cx1 = int(w * (1 + central_fraction) / 2)
+
+        central_mask = np.zeros((h, w), dtype=bool)
+        central_mask[cy0:cy1, cx0:cx1] = True
+
+        # Filtro por saturación (canal S)
+        s_channel = self.hsv[:, :, 1]
+        sat_mask = s_channel > sat_threshold
+
+        fruit_mask = central_mask & sat_mask
+
+        # --- estimar fondo por Hue en los bordes ---
+        if use_bg_hue:
+            h_channel = self.hsv[:, :, 0].astype(np.float32)
+
+            bf = bg_border_frac
+            border_mask = np.zeros((h, w), dtype=bool)
+            # bandas superior, inferior, izquierda y derecha
+            border_mask[:int(h*bf), :] = True
+            border_mask[h-int(h*bf):, :] = True
+            border_mask[:, :int(w*bf)] = True
+            border_mask[:, w-int(w*bf):] = True
+
+            bg_h_vals = h_channel[border_mask]
+            if len(bg_h_vals) > 0:
+                bg_hue = float(np.median(bg_h_vals))
+
+                # píxeles cuyo Hue se aleja lo suficiente del fondo
+                hue_diff = np.abs(h_channel - bg_hue)
+                # cuidado con circularidad de Hue (0 y 179 son vecinos)
+                hue_diff = np.minimum(hue_diff, 180 - hue_diff)
+
+                not_bg_mask = hue_diff > bg_hue_tolerance
+
+                fruit_mask = fruit_mask & not_bg_mask
+
+        # Si casi no hay píxeles, usamos solo la región central sin filtros
+        if np.count_nonzero(fruit_mask) < 50:
+            fruit_mask = central_mask
+
+        return fruit_mask
+
 
     def get_dominant_hsv(self, sat_threshold=40, central_fraction=0.6):
         """
