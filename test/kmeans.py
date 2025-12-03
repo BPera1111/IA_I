@@ -18,7 +18,7 @@ class SimpleKMeans:
     
     def _init_centroids(self, X):
         """
-        Elige k puntos al azar de X como centroides iniciales.
+        Inicializa centroides usando K-Means++ para mejor distribución inicial.
         X: array de shape (n_muestras, n_features)
         """
         if self.random_state is not None:
@@ -28,8 +28,27 @@ class SimpleKMeans:
         if self.k > n_samples:
             raise ValueError("k no puede ser mayor que la cantidad de muestras")
 
-        indices = np.random.choice(n_samples, self.k, replace=False)
-        self.centroids = X[indices].copy()
+        # K-Means++: inicialización inteligente
+        self.centroids = np.zeros((self.k, X.shape[1]))
+        
+        # 1. Elegir primer centroide al azar
+        first_idx = np.random.randint(n_samples)
+        self.centroids[0] = X[first_idx]
+        
+        # 2. Para cada centroide restante
+        for i in range(1, self.k):
+            # Calcular distancia mínima de cada punto a los centroides ya elegidos
+            distances = np.array([
+                np.min([np.linalg.norm(x - c) for c in self.centroids[:i]])
+                for x in X
+            ])
+            
+            # Elegir siguiente centroide con probabilidad proporcional a distancia²
+            probabilities = distances ** 2
+            probabilities /= probabilities.sum()
+            
+            next_idx = np.random.choice(n_samples, p=probabilities)
+            self.centroids[i] = X[next_idx]
 
     def _compute_distances(self, X):
         """
@@ -74,6 +93,7 @@ class SimpleKMeans:
             self.centroids = new_centroids
 
             if shift < self.tol:
+                print("Convergencia alcanzada.")
                 break
 
     def predict(self, X):

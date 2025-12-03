@@ -148,7 +148,8 @@ def main():
                 hue_angle = np.arctan2(sin_h, cos_h) * (180.0 / np.pi)
                 if hue_angle < 0:
                     hue_angle += 360
-                ax.set_title(f"{clase_real}\nH:{hue_angle:.0f}° S:{s:.0f} V:{v:.0f}", fontsize=9)
+                # S y V están normalizados en [0,1], mostrarlos con 2 decimales
+                ax.set_title(f"{clase_real}\nH:{hue_angle:.0f}° S:{s:.2f} V:{v:.2f}", fontsize=9)
             
             ax.axis('off')
         
