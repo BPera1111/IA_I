@@ -557,94 +557,82 @@ def main():
     audio_base_path = '/home/bruno/fing/IA_I/audio'
     imagen_base_path = '/home/bruno/fing/IA_I/data_sin_fondo'
     fotos_sin_fondo_dir = os.path.join(imagen_base_path, 'fotos_sin_fondo')
-    
-    # ============================================================
-    # PARTE 0: CAPTURAR Y PROCESAR FOTOS
-    # ============================================================
-    
-    # 1. Seleccionar cámara
-    camera_index = seleccionar_camara()
-    
-    # 2. Capturar 4 fotos
-    fotos_capturadas = capturar_fotos(fotos_sin_fondo_dir, num_fotos=4, camera_index=camera_index)
-    
-    if len(fotos_capturadas) < 4:
-        print("⚠ No se capturaron suficientes fotos. Abortando.")
-        return
-    
-    # 3. Remover fondo de las fotos
-    fotos_sin_fondo = remover_fondo_fotos(fotos_capturadas, fotos_sin_fondo_dir)
-    
-    if len(fotos_sin_fondo) < 4:
-        print("⚠ Error al procesar las fotos. Abortando.")
-        return
-    
-    # ============================================================
-    # PARTE 1: AUDIO
-    # ============================================================
-    
-    # 4. Cargar dataset de audio
-    X_audio, y_audio = cargar_dataset_audio(audio_base_path)
-    
-    # 5. Entrenar modelo KNN
-    print("="*60)
-    print("ENTRENANDO MODELO KNN (AUDIO)")
-    print("="*60)
-    knn_model = KNN(k=5)
-    knn_model.learning(X_audio, y_audio)
-    print("✓ Modelo KNN entrenado\n")
-    
-    # 6. Grabar audio (con reintentos si no está bien)
-    audio_grabado = None
-    fruta_predicha = None
-    while audio_grabado is None:
-        audio_temp = grabar_audio()
-        
-        # Reproducir para verificar
-        reproducir_audio(audio_temp)
-        
-        # Clasificar provisionalmente para mostrar al usuario
-        fruta_temp = clasificar_audio(knn_model, audio_temp)
-        
-        # Confirmar si está bien
-        if confirmar_grabacion():
-            audio_grabado = audio_temp
-            fruta_predicha = fruta_temp
+
+    def flujo_captura_y_proceso_fotos():
+        camera_index = seleccionar_camara()
+        fotos_capturadas = capturar_fotos(fotos_sin_fondo_dir, num_fotos=4, camera_index=camera_index)
+        if len(fotos_capturadas) < 4:
+            print("⚠ No se capturaron suficientes fotos.")
+            return False
+        fotos_sin_fondo = remover_fondo_fotos(fotos_capturadas, fotos_sin_fondo_dir)
+        if len(fotos_sin_fondo) < 4:
+            print("⚠ Error al procesar las fotos.")
+            return False
+        return True
+
+    def flujo_audio_y_clasificacion():
+        X_audio, y_audio = cargar_dataset_audio(audio_base_path)
+        print("="*60)
+        print("ENTRENANDO MODELO KNN (AUDIO)")
+        print("="*60)
+        knn_model = KNN(k=5)
+        knn_model.learning(X_audio, y_audio)
+        print("✓ Modelo KNN entrenado\n")
+
+        audio_grabado = None
+        fruta_predicha = None
+        while audio_grabado is None:
+            audio_temp = grabar_audio()
+            reproducir_audio(audio_temp)
+            fruta_temp = clasificar_audio(knn_model, audio_temp)
+            if confirmar_grabacion():
+                audio_grabado = audio_temp
+                fruta_predicha = fruta_temp
+            else:
+                print("Intenta de nuevo...\n")
+
+        if fruta_predicha is None:
+            print("Error al clasificar el audio.")
+            return
+
+        X_img, y_img, image_paths = cargar_dataset_imagenes(imagen_base_path)
+        kmeans_model, labels = entrenar_kmeans(X_img, k=4)
+        test_labels = asignar_etiquetas_test(labels, y_img, image_paths)
+
+        imagen_encontrada = None
+        for img_path, etiqueta in test_labels.items():
+            if etiqueta == fruta_predicha:
+                imagen_encontrada = img_path
+                break
+
+        if imagen_encontrada:
+            mostrar_imagen(imagen_encontrada, fruta_predicha)
         else:
-            print("Intenta de nuevo...\n")
-    
-    if fruta_predicha is None:
-        print("Error al clasificar el audio. Abortando.")
-        return
-    
-    # ============================================================
-    # PARTE 2: IMÁGENES
-    # ============================================================
-    
-    # 7. Cargar dataset de imágenes (incluye fotos_sin_fondo)
-    X_img, y_img, image_paths = cargar_dataset_imagenes(imagen_base_path)
-    
-    # 8. Entrenar K-Means
-    kmeans_model, labels = entrenar_kmeans(X_img, k=4)
-    
-    # 9. Asignar etiquetas a fotos capturadas
-    test_labels = asignar_etiquetas_test(labels, y_img, image_paths)
-    
-    # 10. Buscar la imagen que corresponde a la fruta predicha
-    imagen_encontrada = None
-    for img_path, etiqueta in test_labels.items():
-        if etiqueta == fruta_predicha:
-            imagen_encontrada = img_path
+            print("="*60)
+            print("⚠ ADVERTENCIA")
+            print("="*60)
+            print(f"No se encontró una imagen para la fruta: {fruta_predicha}")
+            print(f"Etiquetas disponibles: {list(test_labels.values())}")
+
+    # Menú interactivo
+    while True:
+        print("\n" + "="*60)
+        print("MENÚ PRINCIPAL")
+        print("="*60)
+        print("1) Capturar y procesar 4 fotos")
+        print("2) Grabar audio y buscar imagen correspondiente")
+        print("3) Salir")
+        opcion = input("Selecciona una opción [1-3]: ").strip()
+
+        if opcion == '1':
+            flujo_captura_y_proceso_fotos()
+        elif opcion == '2':
+            flujo_audio_y_clasificacion()
+        elif opcion == '3':
+            print("Saliendo... ¡Hasta luego!")
             break
-    
-    if imagen_encontrada:
-        mostrar_imagen(imagen_encontrada, fruta_predicha)
-    else:
-        print("="*60)
-        print("⚠ ADVERTENCIA")
-        print("="*60)
-        print(f"No se encontró una imagen de test para la fruta: {fruta_predicha}")
-        print(f"Etiquetas disponibles en test: {list(test_labels.values())}")
+        else:
+            print("Opción inválida. Intenta nuevamente.")
 
 
 if __name__ == "__main__":
