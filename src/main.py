@@ -333,20 +333,22 @@ def main():
     
     # 3. Grabar audio (con reintentos si no está bien)
     audio_grabado = None
+    fruta_predicha = None
     while audio_grabado is None:
         audio_temp = grabar_audio()
         
         # Reproducir para verificar
         reproducir_audio(audio_temp)
         
+        # Clasificar provisionalmente para mostrar al usuario
+        fruta_temp = clasificar_audio(knn_model, audio_temp)
+        
         # Confirmar si está bien
         if confirmar_grabacion():
             audio_grabado = audio_temp
+            fruta_predicha = fruta_temp
         else:
             print("Intenta de nuevo...\n")
-    
-    # 4. Clasificar audio
-    fruta_predicha = clasificar_audio(knn_model, audio_grabado)
     
     if fruta_predicha is None:
         print("Error al clasificar el audio. Abortando.")
