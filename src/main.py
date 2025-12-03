@@ -20,11 +20,175 @@ import matplotlib.pyplot as plt
 from collections import Counter
 from pynput import keyboard
 import time
+from PIL import Image
+from rembg import remove
 
 from audio import Audio
 from k_nn import KNN
 from image import FruitImage, FruitDataset
 from kmeans import SimpleKMeans
+
+
+def listar_camaras_disponibles():
+    """
+    Lista todas las cámaras disponibles en el sistema
+    """
+    print("Buscando cámaras disponibles...")
+    camaras = []
+    
+    # Probar los primeros 10 índices
+    for i in range(10):
+        cap = cv2.VideoCapture(i)
+        if cap.isOpened():
+            ret, _ = cap.read()
+            if ret:
+                # Obtener información de la cámara
+                backend = cap.getBackendName()
+                camaras.append((i, backend))
+                print(f"  [{i}] Cámara detectada (Backend: {backend})")
+            cap.release()
+    
+    return camaras
+
+
+def seleccionar_camara():
+    """
+    Permite al usuario seleccionar la cámara a usar
+    """
+    print("="*60)
+    print("SELECCIÓN DE CÁMARA")
+    print("="*60)
+    
+    camaras = listar_camaras_disponibles()
+    
+    if not camaras:
+        print("\n⚠ No se detectaron cámaras disponibles")
+        return 0
+    
+    print(f"\nSe detectaron {len(camaras)} cámara(s)")
+    print("\nPara usar OBS Virtual Camera:")
+    print("  - Asegúrate de que OBS esté corriendo")
+    print("  - Ve a Tools → Start Virtual Camera en OBS")
+    print("  - La cámara virtual suele aparecer con un índice mayor (ej: 2, 4, etc.)\n")
+    
+    while True:
+        try:
+            indice = input(f"Ingresa el número de cámara a usar [0-9] (default=0): ").strip()
+            if indice == "":
+                return 0
+            indice = int(indice)
+            if 0 <= indice <= 9:
+                return indice
+            else:
+                print("Por favor ingresa un número entre 0 y 9")
+        except ValueError:
+            print("Por favor ingresa un número válido")
+
+
+def capturar_fotos(output_dir, num_fotos=4, camera_index=0):
+    """
+    Captura 4 fotos con la cámara y las guarda temporalmente
+    """
+    print("="*60)
+    print("CAPTURA DE FOTOS")
+    print("="*60)
+    print(f"Vamos a capturar {num_fotos} fotos")
+    print("Presiona ESPACIO para capturar cada foto")
+    print("Presiona 'q' para salir\n")
+    
+    # Crear carpeta temporal para fotos originales
+    temp_dir = '/tmp/fotos_temp'
+    os.makedirs(temp_dir, exist_ok=True)
+    
+    # Iniciar cámara con el índice seleccionado
+    print(f"Intentando abrir cámara con índice {camera_index}...")
+    cap = cv2.VideoCapture(camera_index)
+    
+    if not cap.isOpened():
+        print("⚠ Error: No se pudo abrir la cámara")
+        return []
+    
+    fotos_capturadas = []
+    foto_num = 1
+    
+    print(f"Preparando foto {foto_num}/{num_fotos}...")
+    
+    while foto_num <= num_fotos:
+        ret, frame = cap.read()
+        
+        if not ret:
+            print("⚠ Error al capturar frame")
+            break
+        
+        # Mostrar preview
+        cv2.putText(frame, f"Foto {foto_num}/{num_fotos} - Presiona ESPACIO para capturar", 
+                    (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        cv2.imshow('Captura de Fotos', frame)
+        
+        key = cv2.waitKey(1) & 0xFF
+        
+        if key == ord(' '):  # Espacio
+            # Guardar foto
+            foto_path = os.path.join(temp_dir, f'foto_{foto_num}.jpg')
+            cv2.imwrite(foto_path, frame)
+            fotos_capturadas.append(foto_path)
+            
+            print(f"✓ Foto {foto_num}/{num_fotos} capturada")
+            foto_num += 1
+            
+            if foto_num <= num_fotos:
+                print(f"Preparando foto {foto_num}/{num_fotos}...")
+        
+        elif key == ord('q'):  # Salir
+            print("\n⚠ Captura cancelada")
+            break
+    
+    # Liberar cámara y cerrar ventanas
+    cap.release()
+    cv2.destroyAllWindows()
+    
+    if len(fotos_capturadas) == num_fotos:
+        print(f"\n✓ {num_fotos} fotos capturadas exitosamente\n")
+    else:
+        print(f"\n⚠ Solo se capturaron {len(fotos_capturadas)}/{num_fotos} fotos\n")
+    
+    return fotos_capturadas
+
+
+def remover_fondo_fotos(fotos_paths, output_dir):
+    """
+    Remueve el fondo de las fotos capturadas usando rembg
+    """
+    print("="*60)
+    print("REMOVIENDO FONDO DE LAS FOTOS")
+    print("="*60)
+    
+    # Crear directorio de salida
+    os.makedirs(output_dir, exist_ok=True)
+    
+    fotos_sin_fondo = []
+    
+    for i, foto_path in enumerate(fotos_paths, 1):
+        try:
+            print(f"Procesando foto {i}/{len(fotos_paths)}...", end=" ")
+            
+            # Abrir imagen y remover fondo
+            input_img = Image.open(foto_path)
+            output_img = remove(input_img)
+            
+            # Guardar como PNG (para soportar transparencia)
+            output_path = os.path.join(output_dir, f'foto_{i}.png')
+            output_img.save(output_path, 'PNG')
+            
+            fotos_sin_fondo.append(output_path)
+            print(f"✓")
+            
+        except Exception as e:
+            print(f"⚠ Error: {e}")
+    
+    print(f"\n✓ {len(fotos_sin_fondo)} fotos procesadas y guardadas en {output_dir}\n")
+    
+    return fotos_sin_fondo
 
 
 def cargar_dataset_audio(base_path):
@@ -198,6 +362,83 @@ def clasificar_audio(knn_model, audio_path):
 
 def cargar_dataset_imagenes(base_path):
     """
+    Carga todas las imágenes (entrenamiento + fotos_sin_fondo)
+    """
+    print("="*60)
+    print("CARGANDO DATASET DE IMÁGENES")
+    print("="*60)
+    
+    ds = FruitDataset(base_path)
+    ds.build(sat_threshold=40, central_fraction=0.6)
+    
+    X, y = ds.get_data()
+    image_paths = ds.get_image_paths()
+    
+    print(f"Total de imágenes cargadas: {len(X)}\n")
+    
+    return X, y, image_paths
+
+
+def entrenar_kmeans(X, k=4):
+    """
+    Entrena K-Means con las imágenes
+    """
+    print("="*60)
+    print("ENTRENANDO K-MEANS")
+    print("="*60)
+    
+    kmeans = SimpleKMeans(k=k, max_iters=100, tol=1e-4, random_state=42)
+    kmeans.fit(X)
+    labels = kmeans.predict(X)
+    
+    print("✓ Entrenamiento completado\n")
+    
+    return kmeans, labels
+
+
+def asignar_etiquetas_test(labels, y_dataset, image_paths):
+    """
+    Para cada imagen de fotos_sin_fondo, encuentra su cluster y
+    le asigna la etiqueta mayoritaria de ese cluster.
+    
+    Retorna un diccionario: {ruta_imagen_test: etiqueta_asignada}
+    """
+    print("="*60)
+    print("ASIGNANDO ETIQUETAS A FOTOS CAPTURADAS")
+    print("="*60)
+    
+    test_labels = {}
+    
+    # Encontrar índices de imágenes de fotos_sin_fondo
+    test_indices = [i for i, path in enumerate(image_paths) if 'fotos_sin_fondo' in path]
+    
+    for idx in test_indices:
+        cluster_id = labels[idx]
+        img_path = image_paths[idx]
+        
+        # Encontrar todas las imágenes en el mismo cluster
+        cluster_indices = np.where(labels == cluster_id)[0]
+        
+        # Obtener etiquetas de las imágenes del cluster (excluyendo fotos_sin_fondo)
+        cluster_labels = [y_dataset[i] for i in cluster_indices if 'fotos_sin_fondo' not in image_paths[i]]
+        
+        if cluster_labels:
+            # Etiqueta mayoritaria
+            etiqueta_mayoritaria = Counter(cluster_labels).most_common(1)[0][0]
+            # Limpiar nombre (quitar "_sin_fondo")
+            etiqueta_limpia = etiqueta_mayoritaria.replace('_sin_fondo', '')
+            
+            test_labels[img_path] = etiqueta_limpia
+            
+            nombre_archivo = os.path.basename(img_path)
+            print(f"  {nombre_archivo} → Cluster {cluster_id} → {etiqueta_limpia}")
+    
+    print()
+    return test_labels
+
+
+def mostrar_imagen(img_path, fruta_predicha):
+    """
     Carga todas las imágenes (entrenamiento + test_sin_fondo)
     """
     print("="*60)
@@ -240,13 +481,13 @@ def asignar_etiquetas_test(labels, y_dataset, image_paths):
     Retorna un diccionario: {ruta_imagen_test: etiqueta_asignada}
     """
     print("="*60)
-    print("ASIGNANDO ETIQUETAS A IMÁGENES DE TEST")
+    print("ASIGNANDO ETIQUETAS A IMÁGENES DE FOTOS SIN FONDO")
     print("="*60)
     
     test_labels = {}
     
-    # Encontrar índices de imágenes de test_sin_fondo
-    test_indices = [i for i, path in enumerate(image_paths) if 'test_sin_fondo' in path]
+    # Encontrar índices de imágenes de fotos_sin_fondo
+    test_indices = [i for i, path in enumerate(image_paths) if 'fotos_sin_fondo' in path]
     
     for idx in test_indices:
         cluster_id = labels[idx]
@@ -255,8 +496,8 @@ def asignar_etiquetas_test(labels, y_dataset, image_paths):
         # Encontrar todas las imágenes en el mismo cluster
         cluster_indices = np.where(labels == cluster_id)[0]
         
-        # Obtener etiquetas de las imágenes del cluster (excluyendo test_sin_fondo)
-        cluster_labels = [y_dataset[i] for i in cluster_indices if 'test_sin_fondo' not in image_paths[i]]
+        # Obtener etiquetas de las imágenes del cluster (excluyendo fotos_sin_fondo)
+        cluster_labels = [y_dataset[i] for i in cluster_indices if 'fotos_sin_fondo' not in image_paths[i]]
         
         if cluster_labels:
             # Etiqueta mayoritaria
@@ -315,15 +556,37 @@ def main():
     # Rutas base
     audio_base_path = '/home/bruno/fing/IA_I/audio'
     imagen_base_path = '/home/bruno/fing/IA_I/data_sin_fondo'
+    fotos_sin_fondo_dir = os.path.join(imagen_base_path, 'fotos_sin_fondo')
+    
+    # ============================================================
+    # PARTE 0: CAPTURAR Y PROCESAR FOTOS
+    # ============================================================
+    
+    # 1. Seleccionar cámara
+    camera_index = seleccionar_camara()
+    
+    # 2. Capturar 4 fotos
+    fotos_capturadas = capturar_fotos(fotos_sin_fondo_dir, num_fotos=4, camera_index=camera_index)
+    
+    if len(fotos_capturadas) < 4:
+        print("⚠ No se capturaron suficientes fotos. Abortando.")
+        return
+    
+    # 3. Remover fondo de las fotos
+    fotos_sin_fondo = remover_fondo_fotos(fotos_capturadas, fotos_sin_fondo_dir)
+    
+    if len(fotos_sin_fondo) < 4:
+        print("⚠ Error al procesar las fotos. Abortando.")
+        return
     
     # ============================================================
     # PARTE 1: AUDIO
     # ============================================================
     
-    # 1. Cargar dataset de audio
+    # 4. Cargar dataset de audio
     X_audio, y_audio = cargar_dataset_audio(audio_base_path)
     
-    # 2. Entrenar modelo KNN
+    # 5. Entrenar modelo KNN
     print("="*60)
     print("ENTRENANDO MODELO KNN (AUDIO)")
     print("="*60)
@@ -331,7 +594,7 @@ def main():
     knn_model.learning(X_audio, y_audio)
     print("✓ Modelo KNN entrenado\n")
     
-    # 3. Grabar audio (con reintentos si no está bien)
+    # 6. Grabar audio (con reintentos si no está bien)
     audio_grabado = None
     fruta_predicha = None
     while audio_grabado is None:
@@ -358,16 +621,16 @@ def main():
     # PARTE 2: IMÁGENES
     # ============================================================
     
-    # 5. Cargar dataset de imágenes (incluye test_sin_fondo)
+    # 7. Cargar dataset de imágenes (incluye fotos_sin_fondo)
     X_img, y_img, image_paths = cargar_dataset_imagenes(imagen_base_path)
     
-    # 6. Entrenar K-Means
+    # 8. Entrenar K-Means
     kmeans_model, labels = entrenar_kmeans(X_img, k=4)
     
-    # 7. Asignar etiquetas a imágenes de test
+    # 9. Asignar etiquetas a fotos capturadas
     test_labels = asignar_etiquetas_test(labels, y_img, image_paths)
     
-    # 8. Buscar la imagen de test que corresponde a la fruta predicha
+    # 10. Buscar la imagen que corresponde a la fruta predicha
     imagen_encontrada = None
     for img_path, etiqueta in test_labels.items():
         if etiqueta == fruta_predicha:
