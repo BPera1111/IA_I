@@ -109,8 +109,12 @@ class FruitImage:
 
     def get_dominant_hsv(self, sat_threshold=40, central_fraction=0.6):
         """
-        Calcula H, S, V medianos de los píxeles que consideramos fruta.
-        Devuelve una tupla (H, S, V) lista para usar como vector de características.
+        Calcula características de color de los píxeles que consideramos fruta.
+        
+        Para el Hue (circular), usamos representación en coordenadas circulares:
+        - cos(H) y sin(H) para manejar la circularidad (rojo está en 0° y 180°)
+        
+        Devuelve una tupla (cos_h, sin_h, S, V) lista para usar como vector de características.
         """
         mask = self.get_fruit_mask(
             sat_threshold=sat_threshold,
@@ -125,11 +129,20 @@ class FruitImage:
         s_vals = s_channel[mask]
         v_vals = v_channel[mask]
 
-        hue_med = float(np.median(h_vals))
-        sat_med = float(np.median(s_vals))
-        val_med = float(np.median(v_vals))
+        # Convertir Hue a radianes (OpenCV usa 0-179 para Hue)
+        # 179 en OpenCV = 360° = 2π radianes
+        h_rad = h_vals * (2 * np.pi / 180.0)
+        
+        # Calcular coordenadas circulares (promedio de cos y sin)
+        cos_h = float(np.mean(np.cos(h_rad)))
+        sin_h = float(np.mean(np.sin(h_rad)))
+        
+        # Para S y V usamos mediana y NORMALIZAMOS a [0, 1]
+        # OpenCV usa S y V en rango [0, 255]
+        sat_med = float(np.median(s_vals)) / 255.0
+        val_med = float(np.median(v_vals)) / 255.0
 
-        return hue_med, sat_med, val_med
+        return cos_h, sin_h, sat_med, val_med
 
 
 
@@ -137,7 +150,7 @@ class FruitImage:
 class FruitDataset:
     """
     Carga un conjunto de imágenes organizadas en carpetas por fruta y
-    construye un dataset de vectores [H, S, V] + etiquetas.
+    construye un dataset de vectores [cos(H), sin(H), S, V] + etiquetas.
     """
 
     def __init__(self, root_dir):
@@ -151,7 +164,7 @@ class FruitDataset:
                 naranja/
         """
         self.root_dir = root_dir
-        self.X = []  # lista de vectores [H, S, V]
+        self.X = []  # lista de vectores [cos(H), sin(H), S, V]
         self.y = []  # lista de etiquetas (strings, ej: "manzana")
 
     def build(self, sat_threshold=40, central_fraction=0.6):
@@ -179,11 +192,11 @@ class FruitDataset:
 
                 try:
                     fruit_img = FruitImage(img_path)
-                    h, s, v = fruit_img.get_dominant_hsv(
+                    cos_h, sin_h, s, v = fruit_img.get_dominant_hsv(
                         sat_threshold=sat_threshold,
                         central_fraction=central_fraction
                     )
-                    self.X.append([h, s, v])
+                    self.X.append([cos_h, sin_h, s, v])
                     self.y.append(label)
                 except FileNotFoundError as e:
                     print(e)
@@ -195,7 +208,7 @@ class FruitDataset:
     def get_data(self):
         """
         Devuelve (X, y):
-        - X: array de shape (n_muestras, 3)
+        - X: array de shape (n_muestras, 4) con features [cos(H), sin(H), S, V]
         - y: array de etiquetas de longitud n_muestras
         """
         return self.X, self.y
@@ -203,16 +216,21 @@ class FruitDataset:
 
 
 if __name__ == "__main__":
-    root = "/home/bruno/fing/IA_I/img/"  # ruta a tu carpeta raíz
+    root = "/home/bruno/fing/IA_I/data_sin_fondo/"  # ruta a tu carpeta raíz
 
     ds = FruitDataset(root)
     ds.build(sat_threshold=40, central_fraction=0.6)
 
     X, y = ds.get_data()
 
-    print("Shape X:", X.shape)  # (n_imágenes, 3)
+    print("Shape X:", X.shape)  # (n_imágenes, 4)
     print("Etiquetas:", y)
 
-    # Ejemplo: mostrar primeros 5
-    for i in range(min(8, len(X))):
-        print(f"{i}: vec = {X[i]}, label = {y[i]}")
+    # Ejemplo: mostrar todas las muestras
+    for i in range(len(X)):
+        cos_h, sin_h, s, v = X[i]
+        # Opcional: reconstruir el ángulo Hue para visualizar
+        hue_reconstructed = np.arctan2(sin_h, cos_h) * (180.0 / np.pi)
+        if hue_reconstructed < 0:
+            hue_reconstructed += 360
+        print(f"{i}: label={y[i]}, cos(H)={cos_h:.3f}, sin(H)={sin_h:.3f}, S={s:.1f}, V={v:.1f} [Hue≈{hue_reconstructed:.1f}°]")

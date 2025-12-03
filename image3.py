@@ -17,7 +17,7 @@ class ImageProcessor:
         self.test_folder = test_folder  # Carpeta con las imágenes de prueba
 
     def read_image(self, file_path):
-        if file_path.lower().endswith('.jpg'):
+        if file_path.lower().endswith('.png'):
             return cv2.imread(file_path)
         else:
             print("El archivo no es un .jpg válido.")
@@ -216,7 +216,7 @@ if __name__ == "__main__":
     # Rutas de las carpetas
     base_folder = "/home/bruno/fing/IA_I/data"  # Carpeta con imágenes de entrenamiento
     # test_folder = "/home/bruno/fing/IA_I/img/banana/"  # Carpeta con imágenes de prueba
-    test_folder = "/home/bruno/fing/IA_I/data/naranja/"  # Carpeta con imágenes de prueba
+    test_folder = "/home/bruno/fing/IA_I/data/naranja_sin_fondo/"  # Carpeta con imágenes de prueba
     
     # Crear procesador
     processor = ImageProcessor(base_folder, test_folder)
@@ -228,6 +228,5 @@ if __name__ == "__main__":
             image_path = os.path.join(test_folder, file_name)
             processor.visualize_segmentation(image_path)
             break  # Mostrar solo la primera imagen
-
 
 

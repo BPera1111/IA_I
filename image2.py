@@ -227,11 +227,11 @@ class Image:
             pass
 
 
-test = Image('/home/bruno/fing/IA_I/data/banana/banana2.jpg')
-test.get_features()
-test.plot_image()
+# test = Image('/home/bruno/fing/IA_I/data/banana/banana2.jpg')
+# test.get_features()
+# test.plot_image()
 
-test2 = Image('/home/bruno/fing/IA_I/data/banana/banana1.jpg')
+test2 = Image('/home/bruno/fing/IA_I/data/banana_sin_fondo/banana2.png')
 test2.get_features()
 test2.plot_image()
 
@@ -239,7 +239,7 @@ test3 = Image('/home/bruno/fing/IA_I/data/naranja/naranja1.jpg')
 test3.get_features()
 test3.plot_image()
 
-test4 = Image('/home/bruno/fing/IA_I/data/naranja/naranja2.jpg')
+test4 = Image('/home/bruno/fing/IA_I/data/naranja_sin_fondo/naranja1.jpg')
 test4.get_features()
 test4.plot_image()
 
@@ -247,7 +247,7 @@ test5 = Image('/home/bruno/fing/IA_I/data/manzana/manzana1.jpg')
 test5.get_features()
 test5.plot_image()
 
-test6 = Image('/home/bruno/fing/IA_I/data/manzana/manzana2.jpg')
+test6 = Image('/home/bruno/fing/IA_I/data/manzana_sin_fondo/manzana2.png')
 test6.get_features()
 test6.plot_image()
 
@@ -255,7 +255,7 @@ test7 = Image('/home/bruno/fing/IA_I/data/zapallo/zapallo1.jpg')
 test7.get_features()
 test7.plot_image()
 
-test8 = Image('/home/bruno/fing/IA_I/data/zapallo/zapallo2.jpg')
+test8 = Image('/home/bruno/fing/IA_I/data/zapallo_sin_fondo/zapallo2.png')
 test8.get_features()
 test8.plot_image()
 

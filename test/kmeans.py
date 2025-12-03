@@ -2,7 +2,7 @@ import numpy as np
 
 
 class SimpleKMeans:
-    def __init__(self, k, max_iters=100, tol=1e-4, random_state=None):
+    def __init__(self, k, max_iters=10000, tol=1e-4, random_state=None):
         """
         k: cantidad de clusters
         max_iters: máximo de iteraciones del algoritmo
